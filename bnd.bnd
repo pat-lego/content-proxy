@@ -1,0 +1,4 @@
+Bundle-Category: Adobe
+-snapshot: SNAPSHOT
+-noextraheaders: true
+-fixupmessages "Classes found in the wrong directory"; restrict:=error; is:=warning

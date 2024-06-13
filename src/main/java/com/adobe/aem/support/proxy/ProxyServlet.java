@@ -4,6 +4,8 @@ import java.util.Optional;
 
 import javax.servlet.Servlet;
 
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.impl.client.HttpClients;
 import org.apache.sling.api.SlingHttpServletRequest;
 import org.apache.sling.api.SlingHttpServletResponse;
 import org.apache.sling.api.servlets.SlingSafeMethodsServlet;
@@ -11,6 +13,9 @@ import org.apache.sling.servlets.annotations.SlingServletResourceTypes;
 import org.osgi.service.component.annotations.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.adobe.aem.support.proxy.external.ExternalProxyRequest;
+import com.adobe.aem.support.proxy.external.ExternalProxyRequest.Builder;;
 
 
 @Component(service = Servlet.class)
@@ -24,15 +29,29 @@ public class ProxyServlet extends SlingSafeMethodsServlet {
     Logger logger = LoggerFactory.getLogger(this.getClass());
 
     private final static String PROXY_PATH = "proxyPath";
+    private final static String IS_EXTERNAL = "isExternal";
     private final static String DEFAULT_EXTENSION = "html";
     
     @Override
     protected void doGet(final SlingHttpServletRequest request, final SlingHttpServletResponse response) {
         try {
             Optional<String> proxyPath = Optional.ofNullable(request.getResource().getValueMap().get(PROXY_PATH).toString());
+            Optional<String> isExternal = Optional.ofNullable(request.getResource().getValueMap().get(IS_EXTERNAL).toString());
 
             String proxy = null;
-            if (proxyPath.isPresent()) {
+            if (proxyPath.isPresent() && isExternal.isPresent()) {
+                Builder builder = new ExternalProxyRequest.Builder();
+                try (CloseableHttpResponse cresponse = builder
+                    .setUrl(proxyPath.get())
+                    .setHttpClient(HttpClients.createDefault())
+                    .build()
+                    .makeRequest()) {
+                        response.setContentType(cresponse.getEntity().getContentType().getValue());
+                        cresponse.getEntity().writeTo(response.getOutputStream());
+                        response.getOutputStream().flush();
+                        response.setStatus(cresponse.getStatusLine().getStatusCode());
+                    }
+            } else if (proxyPath.isPresent() && isExternal.isEmpty()) {
                 // Get the current extension used and append it to the proxyPath
                 Optional<String> extension = Optional.ofNullable(request.getRequestPathInfo().getExtension());
                 if (extension.isPresent()) {

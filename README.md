@@ -18,7 +18,7 @@ The ProxyServlet retrieves the resource that was requested and gets the property
 
 This in turn allows for the resource that is being rendered to be rendered using the correct scripts.
 
-# Example
+# Example proxy with Local Content 
 
 1. Install wknd project
 2. Create a node `/apps(sling:Folder)/wknd-site(nt:folder)`
@@ -28,3 +28,14 @@ This in turn allows for the resource that is being rendered to be rendered using
     - proxyPath=/apps/wknd-site/magazine
     - sling:resourceType=aem/support/proxy
 6. Make a GET request to `/content/proxies/magazine.html` the rendered page will be the one copied to `/apps/wknd-site/magazine`
+
+# Example proxy with Remote Content 
+
+1. Create a node `/content(sling:Orderedfolder)/licenses(nt:unstructured)/eula(nt:unstructured)`
+2. Set the following properties under the eula node
+       - `isExternal={Boolean}true`
+       - `proxyPath=https://www.fornav.com/documents/EULA.pdf`
+       - `sling:resourceType=aem/support/proxy`
+3. Upload an asset to the dam
+4. Put a node property the metadata node with the following value `xmpRights:WebStatement=/content/licenses/eula.html` (see https://experienceleague.adobe.com/en/docs/experience-manager-brand-portal/using/download/manage-digital-rights-of-assets)
+5. Go download the asset you uploaded in step 3 and you will be presented with https://www.fornav.com/documents/EULA.pdf

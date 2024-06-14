@@ -19,13 +19,8 @@ import org.slf4j.LoggerFactory;
 import com.adobe.aem.support.proxy.external.ExternalProxyRequest;
 import com.adobe.aem.support.proxy.external.ExternalProxyRequest.Builder;;
 
-
 @Component(service = Servlet.class)
-@SlingServletResourceTypes(
-    resourceTypes = "aem/support/proxy",
-    methods = "GET",
-    extensions = {"html", "json", "xml"}
-)
+@SlingServletResourceTypes(resourceTypes = "aem/support/proxy", methods = "GET", extensions = { "html", "json", "xml" })
 public class ProxyServlet extends SlingSafeMethodsServlet {
 
     Logger logger = LoggerFactory.getLogger(this.getClass());
@@ -34,35 +29,52 @@ public class ProxyServlet extends SlingSafeMethodsServlet {
     private final static String IS_EXTERNAL = "isExternal";
     private final static String URL = "url";
     private final static String DEFAULT_EXTENSION = "html";
-    
+
     @Override
-    protected void doGet(final SlingHttpServletRequest request, final SlingHttpServletResponse response) throws IOException {
+    protected void doGet(final SlingHttpServletRequest request, final SlingHttpServletResponse response)
+            throws IOException {
         try {
-            Optional<String> proxyPath = Optional.ofNullable(request.getResource().getValueMap().get(PROXY_PATH).toString());
-            Optional<String> isExternal = Optional.ofNullable(request.getResource().getValueMap().get(IS_EXTERNAL).toString());
+            Optional<String> proxyPath = Optional
+                    .ofNullable(request.getResource().getValueMap().get(PROXY_PATH, String.class));
+            Optional<Boolean> isExternal = Optional
+                    .ofNullable(request.getResource().getValueMap().get(IS_EXTERNAL, Boolean.class));
             Optional<String> queries = Optional.ofNullable(request.getQueryString());
 
             String proxy = null;
+            logger.info("Received request of type {}", request.getMethod());
             if (proxyPath.isPresent() && isExternal.isPresent()) {
                 Builder builder = new ExternalProxyRequest.Builder();
-                if  (queries.isPresent()) {
-                    if (queries.get().contains(URL)) {
-                        // assume only URL is present in the query string
-                        proxyPath = Optional.ofNullable(queries.get().replace("url=", ""));
-                    }
-                    logger.info("Using request path query string param as URL {}", proxyPath.get());
-                }
+                logger.info("Using request path query string param as URL {}", proxyPath.get());
                 try (CloseableHttpResponse cresponse = builder
-                    .setUrl(proxyPath.get())
-                    .setHttpClient(HttpClients.createDefault())
-                    .build()
-                    .makeRequest()) {
-                        response.setContentType(cresponse.getEntity().getContentType().getValue());
-                        cresponse.getEntity().writeTo(response.getOutputStream());
-                        response.getOutputStream().flush();
-                        response.setStatus(cresponse.getStatusLine().getStatusCode());
-                        response.setStatus(SlingHttpServletResponse.SC_OK);
-                    }
+                        .setUrl(proxyPath.get())
+                        .setHttpClient(HttpClients.createDefault())
+                        .build()
+                        .makeRequest()) {
+                    response.setContentType(cresponse.getEntity().getContentType().getValue());
+                    cresponse.getEntity().writeTo(response.getOutputStream());
+                    response.getOutputStream().flush();
+                    response.setStatus(cresponse.getStatusLine().getStatusCode());
+                }
+            } else if (proxyPath.isEmpty() && isExternal.isPresent()) {
+                Builder builder = new ExternalProxyRequest.Builder();
+                if (queries.isEmpty()) {
+                    throw new IllegalArgumentException("Cannot have missing query string parametes");
+                }
+                if (queries.get().contains(URL)) {
+                    // assume only URL is present in the query string
+                    proxyPath = Optional.ofNullable(queries.get().replace("url=", ""));
+                }
+                logger.info("Using request path query string param as URL {}", proxyPath.get());
+                try (CloseableHttpResponse cresponse = builder
+                        .setUrl(proxyPath.get())
+                        .setHttpClient(HttpClients.createDefault())
+                        .build()
+                        .makeRequest()) {
+                    response.setContentType(cresponse.getEntity().getContentType().getValue());
+                    cresponse.getEntity().writeTo(response.getOutputStream());
+                    response.getOutputStream().flush();
+                    response.setStatus(cresponse.getStatusLine().getStatusCode());
+                }
             } else if (proxyPath.isPresent() && isExternal.isEmpty()) {
                 // Get the current extension used and append it to the proxyPath
                 Optional<String> extension = Optional.ofNullable(request.getRequestPathInfo().getExtension());
@@ -71,7 +83,7 @@ public class ProxyServlet extends SlingSafeMethodsServlet {
                 } else {
                     proxy = new StringBuilder(proxyPath.get()).append(".").append(DEFAULT_EXTENSION).toString();
                 }
-                
+
                 request.getRequestDispatcher(proxy).forward(request, response);
             } else {
                 logger.warn("{} parameter is not set on resource {}", PROXY_PATH, request.getResource().getPath());
@@ -85,6 +97,5 @@ public class ProxyServlet extends SlingSafeMethodsServlet {
         }
 
     }
-
 
 }

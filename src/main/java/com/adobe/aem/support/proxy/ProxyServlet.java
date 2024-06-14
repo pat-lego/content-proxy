@@ -1,5 +1,7 @@
 package com.adobe.aem.support.proxy;
 
+import java.io.IOException;
+import java.util.Arrays;
 import java.util.Optional;
 
 import javax.servlet.Servlet;
@@ -30,17 +32,26 @@ public class ProxyServlet extends SlingSafeMethodsServlet {
 
     private final static String PROXY_PATH = "proxyPath";
     private final static String IS_EXTERNAL = "isExternal";
+    private final static String URL = "url";
     private final static String DEFAULT_EXTENSION = "html";
     
     @Override
-    protected void doGet(final SlingHttpServletRequest request, final SlingHttpServletResponse response) {
+    protected void doGet(final SlingHttpServletRequest request, final SlingHttpServletResponse response) throws IOException {
         try {
             Optional<String> proxyPath = Optional.ofNullable(request.getResource().getValueMap().get(PROXY_PATH).toString());
             Optional<String> isExternal = Optional.ofNullable(request.getResource().getValueMap().get(IS_EXTERNAL).toString());
+            Optional<String> queries = Optional.ofNullable(request.getQueryString());
 
             String proxy = null;
             if (proxyPath.isPresent() && isExternal.isPresent()) {
                 Builder builder = new ExternalProxyRequest.Builder();
+                if  (queries.isPresent()) {
+                    if (queries.get().contains(URL)) {
+                        // assume only URL is present in the query string
+                        proxyPath = Optional.ofNullable(queries.get().replace("url=", ""));
+                    }
+                    logger.info("Using request path query string param as URL {}", proxyPath.get());
+                }
                 try (CloseableHttpResponse cresponse = builder
                     .setUrl(proxyPath.get())
                     .setHttpClient(HttpClients.createDefault())
@@ -50,6 +61,7 @@ public class ProxyServlet extends SlingSafeMethodsServlet {
                         cresponse.getEntity().writeTo(response.getOutputStream());
                         response.getOutputStream().flush();
                         response.setStatus(cresponse.getStatusLine().getStatusCode());
+                        response.setStatus(SlingHttpServletResponse.SC_OK);
                     }
             } else if (proxyPath.isPresent() && isExternal.isEmpty()) {
                 // Get the current extension used and append it to the proxyPath
@@ -68,6 +80,8 @@ public class ProxyServlet extends SlingSafeMethodsServlet {
         } catch (Exception e) {
             logger.error("Failed to proxy request due to error", e);
             response.setStatus(SlingHttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        } finally {
+            response.getOutputStream().close();
         }
 
     }
